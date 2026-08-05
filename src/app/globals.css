@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* The tool is a dark-surface analytical view; it does not follow the OS theme. */
+html {
+  color-scheme: dark;
+  background: #0b0b0a;
+}
+
+body {
+  background: #0b0b0a;
+  color: #f4f3ee;
+  font-family:
+    var(--font-geist-sans),
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  overscroll-behavior: none;
+}
+
+/*
+ * Label density is driven by zoom level, set as a data attribute on the graph
+ * root by the d3 zoom handler. Doing it in CSS keeps React out of the scroll
+ * path entirely — no re-render fires while the reader is zooming.
+ *
+ * far  — only the client and high-influence actors are named
+ * mid  — high-influence actors
+ * near — everything
+ * A hovered or selected node always shows its label regardless of zoom.
+ */
+.gc-label-minor {
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+[data-zoom='near'] .gc-label-minor {
+  opacity: 1;
+}
+.gc-label-major {
+  opacity: 1;
+  transition: opacity 160ms ease;
+}
+[data-zoom='far'] .gc-label-major {
+  opacity: 0.75;
+}
+[data-forced='true'] {
+  opacity: 1 !important;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

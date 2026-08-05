@@ -1,0 +1,6 @@
+# pnpm 11 reads settings from here rather than the "pnpm" field in package.json.
+# Install scripts are blocked by default; only these are allowed to run.
+# esbuild is vitest's bundler, unrs-resolver backs eslint module resolution.
+allowBuilds:
+  esbuild: true
+  unrs-resolver: true

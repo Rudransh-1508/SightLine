@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A newer push to the same branch makes the in-flight run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Format, lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # Version comes from the "packageManager" field, so it can't drift.
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Each step runs even if an earlier one failed, so a single CI run reports
+      # every problem at once instead of surfacing them one push at a time.
+      - name: Check formatting
+        id: format
+        if: '!cancelled()'
+        run: pnpm run format:check
+
+      - name: Lint
+        id: lint
+        if: '!cancelled()'
+        run: pnpm run lint
+
+      - name: Typecheck
+        id: typecheck
+        if: '!cancelled()'
+        run: pnpm run typecheck
+
+      - name: Test
+        id: test
+        if: '!cancelled()'
+        run: pnpm run test -- --reporter=verbose
+
+      - name: Build
+        id: build
+        if: '!cancelled()'
+        run: pnpm run build
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:coverage
+      - name: Upload coverage
+        if: '!cancelled()'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: coverage/
+          retention-days: 7
