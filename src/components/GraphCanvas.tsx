@@ -19,9 +19,11 @@ import 'd3-transition'
 import { zoom as d3zoom, zoomIdentity, type ZoomBehavior } from 'd3-zoom'
 import { drag as d3drag } from 'd3-drag'
 
-import { graph, CLIENT_ID, edgeKey, radiusFor, widthFor, adjacency } from '@/lib/graph'
+import { edgeKey, radiusFor, widthFor } from '@/lib/graph'
+import { useGraph } from './GraphProvider'
 import {
   CATEGORY_STYLE,
+  communityColor,
   STATE_COLOR,
   SURFACE,
   REGION_ANCHOR,
@@ -32,6 +34,7 @@ import {
 import type { SimNode, SimEdge } from '@/lib/types'
 
 interface Props {
+  view: { size: 'influence' | 'betweenness'; color: 'category' | 'community' }
   selectedId: string | null
   hoveredId: string | null
   visibleNodeIds: Set<string>
@@ -53,6 +56,7 @@ const H = 1100
  * never write the same attributes.
  */
 export default function GraphCanvas({
+  view,
   selectedId,
   hoveredId,
   visibleNodeIds,
@@ -60,6 +64,7 @@ export default function GraphCanvas({
   onSelect,
   onHover,
 }: Props) {
+  const { data: graph, clientId: CLIENT_ID, adjacency, metrics, maxBetweenness } = useGraph()
   const svgRef = useRef<SVGSVGElement | null>(null)
   const rootRef = useRef<SVGGElement | null>(null)
   const nodeEls = useRef(new Map<string, SVGGElement>())
@@ -86,7 +91,7 @@ export default function GraphCanvas({
           y: a.y * H + (hash01(`${n.id}#y`) - 0.5) * 120,
         }
       }),
-    [],
+    [graph.nodes],
   )
 
   /**
@@ -115,7 +120,7 @@ export default function GraphCanvas({
         key: edgeKey(e),
       } as SimEdge & { curve: number; key: string }
     })
-  }, [simNodes])
+  }, [simNodes, graph.edges])
 
   /**
    * Frame the laid-out graph in the viewport. Measuring the actual node extent
@@ -159,7 +164,7 @@ export default function GraphCanvas({
       if (duration > 0) sel.transition().duration(duration).call(z.transform, t)
       else sel.call(z.transform, t)
     },
-    [simNodes],
+    [simNodes, CLIENT_ID],
   )
 
   // --- simulation ---------------------------------------------------------
@@ -274,7 +279,7 @@ export default function GraphCanvas({
       simRef.current = null
       svg.on('.zoom', null)
     }
-  }, [simNodes, simEdges, fitToBounds])
+  }, [simNodes, simEdges, fitToBounds, CLIENT_ID])
 
   // Focus mode: one hop from the active node stays lit, everything else recedes.
   const active = hoveredId ?? selectedId
@@ -344,8 +349,19 @@ export default function GraphCanvas({
           <g>
             {simNodes.map((n) => {
               const style = CATEGORY_STYLE[n.category]
+              const nodeMetrics = metrics.get(n.id)
+              // Analytics views re-encode size and colour. Both are free —
+              // deterministic graph algorithms, not model calls.
+              const sizeValue =
+                view.size === 'betweenness'
+                  ? ((nodeMetrics?.betweenness ?? 0) / maxBetweenness) * 100
+                  : n.influence
+              const fillColor =
+                view.color === 'community'
+                  ? communityColor(nodeMetrics?.community ?? 0)
+                  : style.color
               const isClient = n.id === CLIENT_ID
-              const r = radiusFor(n.influence, isClient)
+              const r = radiusFor(sizeValue, isClient)
               const dim = nodeDim(n.id)
               const isActive = n.id === active
               const isSelected = n.id === selectedId
@@ -391,8 +407,8 @@ export default function GraphCanvas({
 
                   <path
                     d={shapePath(style.shape, r)}
-                    fill={isClient ? 'none' : style.color}
-                    stroke={isClient ? style.color : SURFACE.page}
+                    fill={isClient ? 'none' : fillColor}
+                    stroke={isClient ? fillColor : SURFACE.page}
                     strokeWidth={isClient ? 2.5 : 1.75}
                   />
 
