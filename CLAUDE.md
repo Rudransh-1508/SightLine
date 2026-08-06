@@ -37,21 +37,27 @@ Every metered route must:
 
 ## Cost table
 
-| Feature                               | Credits |
-| ------------------------------------- | ------- |
-| Triage one document                   | 1       |
-| Extract from one document             | 5       |
-| Copilot question (≤ 2 tool calls)     | 3       |
-| Copilot question (path-finding / > 2) | 5       |
-| Weekly briefing                       | 15      |
-| Re-extraction retry                   | 5       |
+| Feature                                    | Credits |
+| ------------------------------------------ | ------- |
+| Prefilter a document (deterministic)       | **0**   |
+| Triage one batch (~20 documents, one call) | 1       |
+| Extract from one document                  | 5       |
+| Copilot question (≤ 2 tool calls)          | 3       |
+| Copilot question (path-finding / > 2)      | 5       |
+| Weekly briefing                            | 15      |
+| Re-extraction retry                        | 5       |
+
+Triage is priced **per batch, not per document**. Free OpenRouter models allow
+only 50 requests/day, so batching ~20 documents into one call is what makes the
+pipeline viable. Pricing it per document would misstate the cost ~20× and create
+an incentive against the batching the design depends on.
 
 ## Features that cost 0 and must NOT deduct credits
 
 Anything that does not call an LLM: viewing the graph, filtering, focus mode,
-approving or rejecting proposals, and **all graph analytics** (betweenness,
-eigenvector, community detection, path-finding). These are deterministic
-algorithms, not model calls.
+approving or rejecting proposals, the deterministic ingestion prefilter, and
+**all graph analytics** (betweenness, eigenvector, community detection,
+path-finding). These are deterministic algorithms, not model calls.
 
 This is a deliberate product decision — a user with no credits must still get the
 full visualisation and every structural insight. Only generation and extraction
