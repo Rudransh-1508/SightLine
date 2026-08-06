@@ -7,7 +7,6 @@ Built for ApexSignal's stakeholder relationship visualiser assignment. Named for
 <!-- Once pushed, add the CI badge:
      ![CI](https://github.com/<owner>/sightline/actions/workflows/ci.yml/badge.svg) -->
 
-
 **Client chosen:** Repsol. Of the suggested companies it has the most legible geopolitical texture — a single dominant gas supply channel routed through a state-owned counterparty (Sonatrach/Algeria), a sanctioned-jurisdiction position whose value is set in Washington rather than Caracas, a contested-authority producing environment (Libya), and a domestic transition fight conducted in front of regulators. That gives the graph real structure to show instead of a uniform spray of "partners".
 
 > **Illustrative data.** Organisation and individual names are real, and used so the model reads realistically. Every relationship state, score, exposure figure, event and narrative in `src/data/stakeholders.json` is **invented** for this assignment. Nothing in this repo is reporting, or a factual claim about any real entity or person. A dismissible banner says the same thing in the app.

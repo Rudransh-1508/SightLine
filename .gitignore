@@ -16,6 +16,10 @@
 # next.js
 /.next/
 /out/
+# `next dev` recreates this ONLY if CLAUDE.md stops hosting its managed block
+# (see the BEGIN/END markers at the top of CLAUDE.md). CLAUDE.md itself is
+# tracked — it carries real project instructions, not just the Next.js block.
+/AGENTS.md
 
 # production
 /build
