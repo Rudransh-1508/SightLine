@@ -7,45 +7,84 @@
  * into a single "health" score destroys the most decision-relevant signal.
  */
 
-export type Category =
-  | 'client'
-  | 'government'
-  | 'regulator'
-  | 'competitor'
-  | 'supplier'
-  | 'customer'
-  | 'financier'
-  | 'union'
-  | 'ngo'
-  | 'individual'
+/*
+ * Each union below is declared as a `const` array with the type derived from it.
+ * The types are identical to hand-written unions, but the values also exist at
+ * runtime — which is what lets the database enums (src/db/schema.ts) and the
+ * validation tests be generated from this file rather than duplicating the
+ * literals. One source of truth; the DB and the TypeScript model cannot drift.
+ */
+
+export const CATEGORIES = [
+  'client',
+  'government',
+  'regulator',
+  'competitor',
+  'supplier',
+  'customer',
+  'financier',
+  'union',
+  'ngo',
+  'individual',
+] as const
+export type Category = (typeof CATEGORIES)[number]
 
 /** Geographic clusters, used to seed spatial layout so the graph is not a blob. */
-export type Region = 'Iberia' | 'North Africa' | 'Latin America' | 'Europe' | 'North America'
+export const REGIONS = [
+  'Iberia',
+  'North Africa',
+  'Latin America',
+  'Europe',
+  'North America',
+] as const
+export type Region = (typeof REGIONS)[number]
 
 /** How the relationship is doing right now. Ordered worst -> best. */
-export type RelState = 'hostile' | 'strained' | 'transactional' | 'stable' | 'cooperative'
+export const REL_STATES = [
+  'hostile',
+  'strained',
+  'transactional',
+  'stable',
+  'cooperative',
+] as const
+export type RelState = (typeof REL_STATES)[number]
 
 /** Where the relationship is heading. */
-export type Trajectory = 'deteriorating' | 'stable' | 'improving'
+export const TRAJECTORIES = ['deteriorating', 'stable', 'improving'] as const
+export type Trajectory = (typeof TRAJECTORIES)[number]
 
-export type RelType =
-  | 'contractual'
-  | 'regulatory'
-  | 'equity'
-  | 'financing'
-  | 'adversarial'
-  | 'political'
-  | 'advocacy'
-  | 'labour'
+export const REL_TYPES = [
+  'contractual',
+  'regulatory',
+  'equity',
+  'financing',
+  'adversarial',
+  'political',
+  'advocacy',
+  'labour',
+] as const
+export type RelType = (typeof REL_TYPES)[number]
 
 /**
  * Direction encodes *leverage*, not graph topology. Repsol depends on Sonatrach
  * for gas; the CNMC does not depend on Repsol. Knowing who needs whom is what
  * makes this a risk tool rather than an org chart.
  */
-export type Direction = 'mutual' | 'source-depends' | 'target-depends'
+export const DIRECTIONS = ['mutual', 'source-depends', 'target-depends'] as const
+export type Direction = (typeof DIRECTIONS)[number]
 
-export type Confidence = 'high' | 'medium' | 'low'
+export const CONFIDENCES = ['high', 'medium', 'low'] as const
+export type Confidence = (typeof CONFIDENCES)[number]
+
+/** Datasets are either the curated illustrative demo or a sourced, ingested set. */
+export const DATASET_KINDS = ['illustrative', 'sourced'] as const
+export type DatasetKind = (typeof DATASET_KINDS)[number]
+
+export const PROPOSAL_KINDS = ['node_create', 'edge_create', 'edge_update'] as const
+export type ProposalKind = (typeof PROPOSAL_KINDS)[number]
+
+export const PROPOSAL_STATUSES = ['pending', 'approved', 'rejected', 'auto_rejected'] as const
+export type ProposalStatus = (typeof PROPOSAL_STATUSES)[number]
 
 export interface StakeholderNode {
   id: string
