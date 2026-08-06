@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import GraphCanvas from '@/components/GraphCanvas'
-import DetailPanel from '@/components/DetailPanel'
-import Controls, { type FilterState } from '@/components/Controls'
-import { graph, CLIENT_ID, edgeKey, nodeById, summarise } from '@/lib/graph'
+import Link from 'next/link'
+import GraphCanvas from './GraphCanvas'
+import DetailPanel from './DetailPanel'
+import Controls, { type FilterState, type ViewState } from './Controls'
+import { edgeKey } from '@/lib/graph'
+import { useGraph } from './GraphProvider'
 import {
   CATEGORY_ORDER,
   STATE_ORDER,
@@ -15,10 +17,20 @@ import {
 } from '@/lib/palette'
 import type { Category, RelState, Trajectory } from '@/lib/types'
 
-export default function Page() {
+export default function GraphView() {
+  const {
+    data: graph,
+    clientId: CLIENT_ID,
+    nodeById,
+    summarise,
+    datasetName,
+    datasetKind,
+  } = useGraph()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [showNote, setShowNote] = useState(true)
+  const [view, setView] = useState<ViewState>({ size: 'influence', color: 'category' })
+  const isIllustrative = datasetKind === 'illustrative'
   const [filters, setFilters] = useState<FilterState>({
     categories: new Set<Category>(CATEGORY_ORDER),
     states: new Set<RelState>(STATE_ORDER),
@@ -27,7 +39,7 @@ export default function Page() {
     query: '',
   })
 
-  const summary = useMemo(() => summarise(), [])
+  const summary = useMemo(() => summarise(), [summarise])
 
   // Escape is the expected way out of a focused view.
   useEffect(() => {
@@ -78,7 +90,7 @@ export default function Page() {
     nodes.add(CLIENT_ID)
 
     return { visibleNodeIds: nodes, visibleEdgeKeys: edges }
-  }, [filters])
+  }, [filters, graph.nodes, graph.edges, nodeById, CLIENT_ID])
 
   return (
     <div className="flex h-dvh flex-col bg-[#0b0b0a] text-neutral-200">
@@ -89,7 +101,9 @@ export default function Page() {
             <h1 className="text-[15px] font-semibold tracking-tight text-neutral-100">
               Sightline
             </h1>
-            <span className="text-[12px] text-neutral-400">Repsol · stakeholder exposure</span>
+            {/* Dataset-driven rather than hardcoded: the same view renders the
+                illustrative demo and the sourced live graph. */}
+            <span className="text-[12px] text-neutral-400">{datasetName}</span>
             <span className="text-[11px] text-neutral-500">
               {graph.nodes.length} actors · {graph.edges.length} relationships · as of{' '}
               {graph.asOf}
@@ -117,10 +131,16 @@ export default function Page() {
               <span style={{ color: TRAJECTORY_META.improving.color }}>▲</span>{' '}
               {summary.improving} improving
             </span>
+            <Link
+              href="/review"
+              className="rounded border border-white/10 px-2 py-0.5 text-[11px] text-neutral-400 transition hover:bg-white/[0.06] hover:text-neutral-200"
+            >
+              Review queue
+            </Link>
           </div>
         </div>
 
-        {showNote && (
+        {showNote && isIllustrative && (
           <div className="mt-2.5 flex items-start gap-2 rounded border border-amber-400/25 bg-amber-400/[0.07] px-3 py-1.5">
             <p className="flex-1 text-[11px] leading-relaxed text-amber-200/85">
               <strong className="font-semibold">Illustrative data.</strong> Organisation and
@@ -145,6 +165,8 @@ export default function Page() {
           <Controls
             filters={filters}
             onChange={setFilters}
+            view={view}
+            onViewChange={setView}
             visibleCount={visibleEdgeKeys.size}
             totalCount={graph.edges.length}
           />
@@ -156,6 +178,7 @@ export default function Page() {
             hoveredId={hoveredId}
             visibleNodeIds={visibleNodeIds}
             visibleEdgeKeys={visibleEdgeKeys}
+            view={view}
             onSelect={setSelectedId}
             onHover={setHoveredId}
           />
