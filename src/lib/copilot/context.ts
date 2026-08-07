@@ -14,14 +14,27 @@ import type { CopilotContext } from './tools'
  * Metrics are computed here for the same reason, and are free: deterministic
  * graph algorithms, never a model call (CLAUDE.md).
  */
-export async function buildCopilotContext(
-  slug: string,
-): Promise<{ context: CopilotContext; datasetName: string } | null> {
+export interface ClientIdentity {
+  id: string
+  name: string
+}
+
+export async function buildCopilotContext(slug: string): Promise<{
+  context: CopilotContext
+  datasetName: string
+  /** The graph's own client node — "me" in a question, per agent.ts. */
+  client: ClientIdentity
+} | null> {
   const graph = await getGraph(slug)
   if (!graph) return null
 
+  const clientNode = graph.nodes.find((n) => n.id === graph.client)
+
   return {
     datasetName: graph.name,
+    // graph.client is always one of graph.nodes (graph-db.ts derives it from
+    // the same rows), so this is defensive, not an expected fallback.
+    client: { id: graph.client, name: clientNode?.name ?? graph.client },
     context: {
       graph,
       metrics: computeMetrics(graph),

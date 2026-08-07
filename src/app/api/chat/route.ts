@@ -113,6 +113,7 @@ export async function POST(request: Request) {
           model,
           question,
           runner,
+          graphClient: built.client,
           onEvent: send,
         })
 

@@ -47,7 +47,11 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.OPENROUTER_COPILOT_MODEL = 'test/copilot'
   requireUser.mockResolvedValue({ id: 'u1', email: 'a@b.c' })
-  buildCopilotContext.mockResolvedValue({ datasetName: 'Repsol', context: {} })
+  buildCopilotContext.mockResolvedValue({
+    datasetName: 'Repsol',
+    context: {},
+    client: { id: 'repsol', name: 'Repsol' },
+  })
   createToolRunner.mockReturnValue({ definitions: [] })
   getOpenRouterClient.mockReturnValue({ streamWithTools: vi.fn() })
   reserve.mockResolvedValue(RESERVATION)
@@ -220,6 +224,19 @@ describe('POST /api/chat — the stream', () => {
     const emitted = await events(res)
     expect(emitted.map((e) => e.type)).toEqual(['delta', 'citations', 'done'])
     expect(emitted[0]).toMatchObject({ text: 'Because [node:repsol].' })
+  })
+
+  /**
+   * Without this, "what is my Algeria exposure" gets refused for not knowing
+   * what "my" means — the client identity has to reach the agent, not just
+   * live in buildCopilotContext's return value.
+   */
+  it('passes the dataset\'s client identity to the agent so "me" resolves', async () => {
+    const { POST } = await route()
+    await POST(post({ question: 'why?' }))
+    expect(runCopilot).toHaveBeenCalledWith(
+      expect.objectContaining({ graphClient: { id: 'repsol', name: 'Repsol' } }),
+    )
   })
 
   it('defaults to the demo dataset and passes an explicit one through', async () => {

@@ -111,7 +111,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       type: 'object',
       properties: {
         query: str('Free text matched against name, role, country and region.'),
-        limit: num('Maximum results. Default 8.'),
+        limit: num('Maximum results. Default 6.'),
       },
       required: ['query'],
       additionalProperties: false,
@@ -141,7 +141,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         state: enumOf(REL_STATES, 'Only relationships currently in this state.'),
         trajectory: enumOf(TRAJECTORIES, 'Only relationships heading this way.'),
         min_strength: num('Only relationships at or above this strength (0-100).'),
-        limit: num('Maximum results. Default 10.'),
+        limit: num('Maximum results. Default 6.'),
       },
       required: ['node_id'],
       additionalProperties: false,
@@ -190,7 +190,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         trajectory: enumOf(TRAJECTORIES, 'Only relationships heading this way.'),
         type: enumOf(REL_TYPES, 'Only relationships of this type.'),
         min_strength: num('Only relationships at or above this strength (0-100).'),
-        limit: num('Maximum results. Default 10.'),
+        limit: num('Maximum results. Default 6.'),
       },
       required: [],
       additionalProperties: false,
@@ -199,8 +199,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   {
     name: 'get_timeline',
     description:
-      'Recorded changes to one relationship, newest first — what moved, when, and from ' +
-      'what to what. Empty for a relationship that has never been revised.',
+      'One relationship in full — its untrimmed narrative and exposure — plus every ' +
+      'recorded change to it, newest first. Use it when a list result was clipped and ' +
+      'the full text matters. The change list is empty if it has never been revised.',
     parameters: {
       type: 'object',
       properties: { edge_id: str('Edge id in the form source->target:type.') },
@@ -244,8 +245,26 @@ function shapeNode(g: GraphData, id: string, metrics: Map<string, NodeMetrics>) 
   }
 }
 
-function shapeEdge(g: GraphData, e: RelationshipEdge) {
+/** Cuts long prose at a word boundary so a list result stays affordable. */
+function clip(text: string, max: number): string {
+  if (text.length <= max) return text
+  const cut = text.slice(0, max)
+  const space = cut.lastIndexOf(' ')
+  return `${cut.slice(0, space > max * 0.6 ? space : max).trimEnd()}…`
+}
+
+/**
+ * One relationship, shaped for the model.
+ *
+ * `detail: 'list'` is the default because most calls return several edges and
+ * every one of them is resent with every later turn. The narrative and the
+ * last event are the fields that run long, so in list form they are clipped —
+ * enough to judge and quote a phrase from, not the full analyst write-up. A
+ * question that needs the whole text can ask for the one relationship.
+ */
+function shapeEdge(g: GraphData, e: RelationshipEdge, detail: 'list' | 'full' = 'list') {
   const name = (id: string) => g.nodes.find((n) => n.id === id)?.name ?? id
+  const full = detail === 'full'
   return {
     edge_id: edgeKey(e),
     source_id: e.source,
@@ -257,10 +276,12 @@ function shapeEdge(g: GraphData, e: RelationshipEdge) {
     strength: e.strength,
     state: e.state,
     trajectory: e.trajectory,
-    exposure: e.exposure,
+    exposure: full ? e.exposure : clip(e.exposure, 140),
     since: e.since,
-    last_event: e.lastEvent,
-    narrative: e.narrative,
+    last_event: full
+      ? e.lastEvent
+      : { date: e.lastEvent.date, summary: clip(e.lastEvent.summary, 140) },
+    narrative: full ? e.narrative : clip(e.narrative, 180),
     confidence: e.confidence,
   }
 }
@@ -322,7 +343,7 @@ export function createToolRunner(ctx: CopilotContext) {
 
     switch (name as ToolName) {
       case 'search_entities': {
-        const { query, limit = 8 } = args as z.infer<typeof schemas.search_entities>
+        const { query, limit = 6 } = args as z.infer<typeof schemas.search_entities>
         const q = query.trim().toLowerCase()
         const matches = g.nodes
           .filter((n) =>
@@ -363,7 +384,7 @@ export function createToolRunner(ctx: CopilotContext) {
           state,
           trajectory,
           min_strength = 0,
-          limit = 10,
+          limit = 6,
         } = args as z.infer<typeof schemas.get_relationships>
         if (!g.nodes.some((n) => n.id === node_id)) {
           throw new ToolArgumentError(`No node with id "${node_id}".`)
@@ -446,7 +467,7 @@ export function createToolRunner(ctx: CopilotContext) {
           trajectory,
           type,
           min_strength = 0,
-          limit = 10,
+          limit = 6,
         } = args as z.infer<typeof schemas.filter_edges>
         const matches = g.edges
           .filter((e) => (state ? e.state === state : true))
@@ -475,6 +496,10 @@ export function createToolRunner(ctx: CopilotContext) {
         const entries = await ctx.timeline(edge.source, edge.target, edge.type)
         return {
           edge_id,
+          // The one place a relationship comes back untrimmed: this tool asks
+          // about a single edge, so the full narrative and exposure are cheap
+          // here in a way they are not in a list of six.
+          relationship: shapeEdge(g, edge, 'full'),
           /* The seeded fixture has no revision history; say so rather than
            * returning an empty list the model might read as "nothing changed". */
           note:

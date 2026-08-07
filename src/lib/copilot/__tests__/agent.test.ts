@@ -59,13 +59,19 @@ function setup() {
   const client = new MockToolCallingClient()
   const runner = createToolRunner(contextFromGraph(GRAPH))
   const events: CopilotEvent[] = []
-  const run = (question = 'What is my Algeria exposure?', maxRounds?: number) =>
+  const run = (
+    question = 'What is my Algeria exposure?',
+    maxRounds?: number,
+    maxToolCalls?: number,
+  ) =>
     runCopilot({
       client,
       model: 'test-copilot',
       question,
       runner,
+      graphClient: { id: 'repsol', name: 'Repsol' },
       maxRounds,
+      maxToolCalls,
       onEvent: (e) => events.push(e),
     })
   return { client, runner, events, run }
@@ -75,6 +81,27 @@ const toolCall = (name: string, args: object, id = 'call_1') => ({
   id,
   name,
   arguments: JSON.stringify(args),
+})
+
+describe('client grounding', () => {
+  /**
+   * The failure this pins: the first live question ("What is my Algeria
+   * exposure?") was refused because the model had no way to know what "my"
+   * meant. The system prompt now names the graph's client explicitly, so
+   * "me"/"my"/"us" never needs a tool call to resolve.
+   */
+  it('tells the model who "me" refers to, by name and id', async () => {
+    const { client, run } = setup()
+    client.respondWith({ content: 'Answer.' })
+
+    await run('What is my Algeria exposure?')
+
+    const system = client.calls[0].messages[0]
+    expect(system.role).toBe('system')
+    expect(system.content).toContain('"me", "my", "us"')
+    expect(system.content).toContain('they mean Repsol')
+    expect(system.content).toContain('node id "repsol"')
+  })
 })
 
 describe('the tool loop', () => {
@@ -129,6 +156,31 @@ describe('the tool loop', () => {
     expect(client.callCount).toBe(3)
     expect(client.calls[2].toolChoice).toBe('none')
     expect(result.answer).toBe('Forced answer about [node:repsol].')
+  })
+
+  /**
+   * The round cap alone does not bound the work: one turn can request several
+   * tools at once, and every result is then resent with every later turn. This
+   * is the ceiling on total queries, and it must hold even with rounds to
+   * spare.
+   */
+  it('stops calling tools once the tool-call ceiling is reached', async () => {
+    const { client, run } = setup()
+    client
+      .respondWith({
+        toolCalls: [
+          toolCall('get_node', { node_id: 'repsol' }, 'c1'),
+          toolCall('get_node', { node_id: 'sonatrach' }, 'c2'),
+        ],
+      })
+      .respondWith({ content: 'Answer from what I have [node:repsol].' })
+
+    const result = await run('why', 6, 2)
+
+    expect(result.toolCallCount).toBe(2)
+    // Rounds remained, but tools were switched off for the answering turn.
+    expect(client.callCount).toBe(2)
+    expect(client.calls[1].toolChoice).toBe('none')
   })
 
   it('surfaces an empty answer as an error rather than a blank success', async () => {
