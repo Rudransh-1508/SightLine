@@ -165,3 +165,27 @@ export function shapePath(shape: Shape, r: number): string {
       return `M${-r},0A${r},${r} 0 1,0 ${r},0A${r},${r} 0 1,0 ${-r},0Z`
   }
 }
+
+/**
+ * Colours for discovered communities.
+ *
+ * Reuses the validated dark-mode categorical steps. Community colouring and
+ * category colouring are mutually exclusive views, so the two never appear at
+ * once and cannot be confused. Louvain community ids are small integers; more
+ * communities than colours wraps, which is acceptable because community
+ * identity is relative and the legend is positional.
+ */
+export const COMMUNITY_COLORS = [
+  '#3987e5',
+  '#d95926',
+  '#199e70',
+  '#c98500',
+  '#9085e9',
+  '#008300',
+  '#d55181',
+  '#e66767',
+] as const
+
+export function communityColor(id: number): string {
+  return COMMUNITY_COLORS[id % COMMUNITY_COLORS.length]
+}

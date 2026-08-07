@@ -20,14 +20,32 @@ export interface FilterState {
   query: string
 }
 
+/** How node size and colour are encoded. Analytics views cost no credits. */
+export type SizeMode = 'influence' | 'betweenness'
+export type ColorMode = 'category' | 'community'
+
+export interface ViewState {
+  size: SizeMode
+  color: ColorMode
+}
+
 interface Props {
   filters: FilterState
   onChange: (f: FilterState) => void
+  view: ViewState
+  onViewChange: (v: ViewState) => void
   visibleCount: number
   totalCount: number
 }
 
-export default function Controls({ filters, onChange, visibleCount, totalCount }: Props) {
+export default function Controls({
+  filters,
+  onChange,
+  view,
+  onViewChange,
+  visibleCount,
+  totalCount,
+}: Props) {
   function toggle<T>(set: Set<T>, value: T, key: keyof FilterState) {
     const next = new Set(set)
     if (next.has(value)) next.delete(value)
@@ -83,6 +101,29 @@ export default function Controls({ filters, onChange, visibleCount, totalCount }
           Material relationships that are deteriorating
         </span>
       </button>
+
+      <Group label="Encoding">
+        <div className="space-y-2">
+          <Segmented
+            label="Size"
+            value={view.size}
+            options={[
+              { value: 'influence', label: 'Influence', hint: 'hand-assigned' },
+              { value: 'betweenness', label: 'Chokepoint', hint: 'computed betweenness' },
+            ]}
+            onChange={(size) => onViewChange({ ...view, size: size as SizeMode })}
+          />
+          <Segmented
+            label="Colour"
+            value={view.color}
+            options={[
+              { value: 'category', label: 'Type', hint: 'actor category' },
+              { value: 'community', label: 'Cluster', hint: 'discovered community' },
+            ]}
+            onChange={(color) => onViewChange({ ...view, color: color as ColorMode })}
+          />
+        </div>
+      </Group>
 
       <Group label="Actor type">
         <div className="space-y-0.5">
@@ -208,6 +249,40 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
         {label}
       </h3>
       {children}
+    </div>
+  )
+}
+
+function Segmented({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string
+  value: string
+  options: Array<{ value: string; label: string; hint: string }>
+  onChange: (v: string) => void
+}) {
+  return (
+    <div>
+      <div className="mb-1 text-[10px] text-neutral-500">{label}</div>
+      <div className="flex overflow-hidden rounded border border-white/10">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            title={o.hint}
+            onClick={() => onChange(o.value)}
+            className={`flex-1 px-2 py-1 text-[11px] transition ${
+              value === o.value
+                ? 'bg-white/12 text-neutral-100'
+                : 'text-neutral-500 hover:bg-white/[0.05]'
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

@@ -10,15 +10,7 @@ import {
   SURFACE,
   shapePath,
 } from '@/lib/palette'
-import {
-  nodeById,
-  edgesFor,
-  clientEdgesFor,
-  leverageLabel,
-  degree,
-  CLIENT_ID,
-  graph,
-} from '@/lib/graph'
+import { useGraph } from './GraphProvider'
 import type { RelationshipEdge } from '@/lib/types'
 
 interface Props {
@@ -27,15 +19,19 @@ interface Props {
 }
 
 export default function DetailPanel({ selectedId, onSelect }: Props) {
+  // Hook first: React requires an unconditional call order, so it must run
+  // before the early returns below.
+  const { nodeById, clientId, clientEdgesFor, edgesFor, degree: degreeMap } = useGraph()
+
   if (!selectedId) return <EmptyState />
 
   const node = nodeById.get(selectedId)
   if (!node) return <EmptyState />
 
   const style = CATEGORY_STYLE[node.category]
-  const isClient = node.id === CLIENT_ID
+  const isClient = node.id === clientId
   const clientEdges = isClient ? [] : clientEdgesFor(node.id)
-  const others = edgesFor(node.id).filter(({ other }) => isClient || other.id !== CLIENT_ID)
+  const others = edgesFor(node.id).filter(({ other }) => isClient || other.id !== clientId)
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
@@ -62,7 +58,7 @@ export default function DetailPanel({ selectedId, onSelect }: Props) {
           <Stat label="Base" value={node.country} />
           <Stat label="Influence" value={`${node.influence}/100`} />
           <Stat label="Region" value={node.region} />
-          <Stat label="Links" value={String(degree.get(node.id) ?? 0)} />
+          <Stat label="Links" value={String(degreeMap.get(node.id) ?? 0)} />
           {node.keyPeople?.length ? (
             <Stat label="Key people" value={node.keyPeople.join(', ')} />
           ) : null}
@@ -134,6 +130,7 @@ export default function DetailPanel({ selectedId, onSelect }: Props) {
 }
 
 function EdgeCard({ edge, expanded }: { edge: RelationshipEdge; expanded?: boolean }) {
+  const { leverageLabel } = useGraph()
   const traj = TRAJECTORY_META[edge.trajectory]
   return (
     <div className="mt-2.5">
@@ -240,7 +237,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 }
 
 function EmptyState() {
-  const total = graph.edges.length
+  const { data } = useGraph()
+  const total = data.edges.length
   return (
     <div className="flex h-full flex-col justify-center px-6 py-8">
       <p className="text-[10px] uppercase tracking-[0.14em] text-neutral-500">No selection</p>
