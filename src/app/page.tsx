@@ -14,7 +14,7 @@ import { getGraph } from '@/lib/graph-db'
  * would not expose this page's data.
  */
 export default async function Page() {
-  await requireUser()
+  const user = await requireUser()
 
   const graph = await getGraph('repsol-demo')
   if (!graph) notFound()
@@ -26,7 +26,9 @@ export default async function Page() {
       datasetName={graph.name}
       datasetKind={graph.kind}
     >
-      <GraphView />
+      {/* The cached balance is good enough to render; the copilot replaces it
+          with the ledger-derived figure after every answer. */}
+      <GraphView initialCredits={user.creditBalance} />
     </GraphProvider>
   )
 }

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import GraphCanvas from './GraphCanvas'
 import DetailPanel from './DetailPanel'
+import CopilotPanel, { type CopilotFocus } from './CopilotPanel'
 import Controls, { type FilterState, type ViewState } from './Controls'
 import { edgeKey } from '@/lib/graph'
 import { useGraph } from './GraphProvider'
@@ -17,7 +18,7 @@ import {
 } from '@/lib/palette'
 import type { Category, RelState, Trajectory } from '@/lib/types'
 
-export default function GraphView() {
+export default function GraphView({ initialCredits }: { initialCredits: number }) {
   const {
     data: graph,
     clientId: CLIENT_ID,
@@ -30,6 +31,10 @@ export default function GraphView() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [showNote, setShowNote] = useState(true)
   const [view, setView] = useState<ViewState>({ size: 'influence', color: 'category' })
+  const [panel, setPanel] = useState<'copilot' | 'detail'>('copilot')
+  const [credits, setCredits] = useState(initialCredits)
+  /** The subgraph an answer cited, or null when the graph is unconstrained. */
+  const [answerFocus, setAnswerFocus] = useState<CopilotFocus | null>(null)
   const isIllustrative = datasetKind === 'illustrative'
   const [filters, setFilters] = useState<FilterState>({
     categories: new Set<Category>(CATEGORY_ORDER),
@@ -41,13 +46,25 @@ export default function GraphView() {
 
   const summary = useMemo(() => summarise(), [summarise])
 
-  // Escape is the expected way out of a focused view.
+  // Escape is the expected way out of a focused view — first the selection,
+  // then the answer's focus, so one key backs all the way out to the whole map.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null)
+      if (e.key !== 'Escape') return
+      setSelectedId((current) => {
+        if (current) return null
+        setAnswerFocus(null)
+        return null
+      })
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  /** Selecting an actor anywhere shows its profile, so switch to that panel. */
+  const selectAndShowDetail = useCallback((id: string | null) => {
+    setSelectedId(id)
+    if (id) setPanel('detail')
   }, [])
 
   /**
@@ -89,8 +106,28 @@ export default function GraphView() {
     }
     nodes.add(CLIENT_ID)
 
+    /*
+     * An answer steers the graph by narrowing the same visibility sets the
+     * filters use, rather than through a parallel highlighting mechanism. The
+     * canvas therefore needs no knowledge of the copilot at all: it keeps
+     * dimming whatever is not visible, the layout never reflows, and Escape
+     * and the filter controls behave exactly as they did before.
+     */
+    if (answerFocus) {
+      for (const key of edges) if (!answerFocus.edges.has(key)) edges.delete(key)
+      const kept = new Set(answerFocus.nodes)
+      for (const key of edges) {
+        const edge = graph.edges.find((e) => edgeKey(e) === key)
+        if (edge) {
+          kept.add(edge.source)
+          kept.add(edge.target)
+        }
+      }
+      for (const id of nodes) if (!kept.has(id)) nodes.delete(id)
+    }
+
     return { visibleNodeIds: nodes, visibleEdgeKeys: edges }
-  }, [filters, graph.nodes, graph.edges, nodeById, CLIENT_ID])
+  }, [filters, graph.nodes, graph.edges, nodeById, CLIENT_ID, answerFocus])
 
   return (
     <div className="flex h-dvh flex-col bg-[#0b0b0a] text-neutral-200">
@@ -130,6 +167,12 @@ export default function GraphView() {
             <span className="text-[11px] text-neutral-400">
               <span style={{ color: TRAJECTORY_META.improving.color }}>▲</span>{' '}
               {summary.improving} improving
+            </span>
+            <span
+              className="text-[11px] tabular-nums text-neutral-400"
+              title="Credits. Only generation and extraction cost anything — the graph, filters and all analytics are free."
+            >
+              {credits} credits
             </span>
             <Link
               href="/review"
@@ -172,20 +215,71 @@ export default function GraphView() {
           />
         </aside>
 
-        <main className="order-1 min-h-[54vh] flex-1 lg:order-2 lg:min-h-0">
+        <main className="relative order-1 min-h-[54vh] flex-1 lg:order-2 lg:min-h-0">
+          {answerFocus && (
+            <div className="absolute left-4 top-4 z-10 flex items-center gap-2 rounded border border-white/15 bg-black/70 px-2.5 py-1 backdrop-blur">
+              <span className="text-[11px] text-neutral-300">
+                Focused on the answer · {visibleNodeIds.size} actors, {visibleEdgeKeys.size}{' '}
+                relationships
+              </span>
+              <button
+                onClick={() => setAnswerFocus(null)}
+                className="text-[11px] text-neutral-500 transition hover:text-neutral-200"
+              >
+                Show all
+              </button>
+            </div>
+          )}
           <GraphCanvas
             selectedId={selectedId}
             hoveredId={hoveredId}
             visibleNodeIds={visibleNodeIds}
             visibleEdgeKeys={visibleEdgeKeys}
             view={view}
-            onSelect={setSelectedId}
+            onSelect={selectAndShowDetail}
             onHover={setHoveredId}
           />
         </main>
 
-        <aside className="order-3 w-full shrink-0 border-white/10 lg:w-[352px] lg:border-l">
-          <DetailPanel selectedId={selectedId} onSelect={setSelectedId} />
+        <aside className="order-3 flex w-full shrink-0 flex-col border-white/10 lg:w-[352px] lg:border-l">
+          <div className="flex shrink-0 border-b border-white/10">
+            {(
+              [
+                ['copilot', 'Ask'],
+                ['detail', 'Detail'],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setPanel(key)}
+                className={`flex-1 px-3 py-2 text-[11px] uppercase tracking-[0.14em] transition ${
+                  panel === key
+                    ? 'border-b border-neutral-200 text-neutral-100'
+                    : 'text-neutral-500 hover:text-neutral-300'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/*
+           * Both panels stay mounted: unmounting the copilot would throw away
+           * an answer the moment the reader clicked one of its own citations,
+           * which is the interaction the whole feature exists for.
+           */}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <div className={panel === 'copilot' ? 'h-full' : 'hidden'}>
+              <CopilotPanel
+                onFocus={setAnswerFocus}
+                onSelect={selectAndShowDetail}
+                onBalanceChange={setCredits}
+              />
+            </div>
+            <div className={panel === 'detail' ? 'h-full' : 'hidden'}>
+              <DetailPanel selectedId={selectedId} onSelect={setSelectedId} />
+            </div>
+          </div>
         </aside>
       </div>
     </div>
