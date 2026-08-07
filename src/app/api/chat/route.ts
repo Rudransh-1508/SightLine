@@ -82,6 +82,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Unknown dataset "${slug}"` }, { status: 404 })
   }
 
+  /*
+   * Constructed BEFORE any credits are reserved, deliberately. This throws if
+   * OPENROUTER_API_KEY is missing — a config error, not a per-request one —
+   * and it must fail here, cheaply, rather than after reserve() has already
+   * spent the caller's credits. It used to be built after reserve() with
+   * nothing to catch it: a missing key crashed the request with no Response
+   * ever created (surfaces as a dead connection, not a status code) and the
+   * reservation was never refunded, since the refund path only runs inside
+   * the stream that never got a chance to start. Same failure shape as the
+   * `model` check two lines up — both belong before the spend, not after.
+   */
+  let client
+  try {
+    client = getOpenRouterClient()
+  } catch (err) {
+    console.error('failed to construct the OpenRouter client:', err)
+    return NextResponse.json({ error: 'Copilot is not configured' }, { status: 503 })
+  }
+
   // Everything that can fail cheaply has now failed. Reserve at the worst-case
   // price; a caller short of credits never reaches the provider.
   let reservation
@@ -98,7 +117,6 @@ export async function POST(request: Request) {
   }
 
   const runner = createToolRunner(built.context)
-  const client = getOpenRouterClient()
   const encoder = new TextEncoder()
 
   const stream = new ReadableStream<Uint8Array>({

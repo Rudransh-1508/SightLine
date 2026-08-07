@@ -143,6 +143,29 @@ describe('POST /api/chat — validation', () => {
     expect(res.status).toBe(503)
     expect(reserve).not.toHaveBeenCalled()
   })
+
+  /**
+   * A missing OPENROUTER_API_KEY used to crash the request AFTER credits were
+   * reserved, with nothing to catch it — no Response was ever created (the
+   * client saw a dead connection, not a status code) and the reservation was
+   * never refunded, since the refund path only runs inside the stream that
+   * never got a chance to start. The client is now constructed before
+   * reserve() runs, so this must fail the same cheap way the missing-model
+   * check does: a real Response, and no credits ever spent.
+   */
+  it('returns 503 without reserving credits when the OpenRouter client fails to construct', async () => {
+    getOpenRouterClient.mockImplementationOnce(() => {
+      throw new Error('OPENROUTER_API_KEY is not set.')
+    })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { POST } = await route()
+
+    const res = await POST(post({ question: 'why?' }))
+
+    expect(res.status).toBe(503)
+    expect(reserve).not.toHaveBeenCalled()
+    expect(runCopilot).not.toHaveBeenCalled()
+  })
 })
 
 describe('POST /api/chat — metering', () => {
